@@ -1,4 +1,4 @@
-# Generative AI Experiments
+# Generative AI and RAG system
 
 Generative AI encompasses computational techniques designed to generate original content such as text, images, or audio, derived from training data. The advent of technologies like Deepseek, MetaAI, and Mistral AI is reshaping professional and communicative practices globally. These systems are not only tools for creative endeavours, such as authorship replication or illustrative recreation, but also valuable assistants in practical tasks, including question-and-answer functions.
 
