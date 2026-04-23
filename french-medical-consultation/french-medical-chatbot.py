@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Medical Chatbot for Patient-Doctor Consultations (French)
 """
@@ -18,19 +17,19 @@ from elasticsearch import Elasticsearch, helpers
 # Gradio UI
 import gradio as gr
 
-# LLM integration (choose your preferred provider)
+# LLM integration 
 from openai import OpenAI
 import ollama  # Alternative local LLM
 
 
 # 1. Data Loading Function
-# ============================================================================
-def load_medical_data(num_rows: int = 5000, cache_dir: str = "./medical_data_cache"):
+# ==================================================
+def load_medical_data(num_rows: int = 500, cache_dir: str = "./medical_data_cache"):
     """
     Load medical dataset from Hugging Face, limit to first num_rows.
     
     Args:
-        num_rows: Number of rows to load (default 5000)
+        num_rows: Number of rows to load (default 500)
         cache_dir: Directory to cache the dataset
     
     Returns:
@@ -43,7 +42,7 @@ def load_medical_data(num_rows: int = 5000, cache_dir: str = "./medical_data_cac
         dataset = load_dataset(
             "rntc/combined-medical-french",
             split="train",
-            streaming=False,  # Load fully to limit rows
+            streaming=False,  
             cache_dir=cache_dir
         )
         
@@ -53,7 +52,7 @@ def load_medical_data(num_rows: int = 5000, cache_dir: str = "./medical_data_cac
         # Convert to pandas for easier handling
         df = pd.DataFrame(data)
         
-        # Basic preprocessing
+        # Basic pre-processing
         if "text" in df.columns:
             # Remove rows with empty text
             df = df.dropna(subset=["text"])
@@ -115,7 +114,7 @@ def load_medical_data_limited(num_rows: int = 50, cache_dir: str = "./medical_da
     logging.info(f"Successfully loaded {len(documents)} medical cases")
     return documents
         
-def create_sample_data(num_rows: int = 5000) -> List[Dict]:
+def create_sample_data(num_rows: int = 500) -> List[Dict]:
     """
     Create sample medical data for testing when dataset is unavailable.
     """
@@ -148,7 +147,7 @@ def create_sample_data(num_rows: int = 5000) -> List[Dict]:
 
 
 # 2. Elasticsearch Setup and Search Function
-# ============================================================================
+# ==================================================
 def setup_elasticsearch_index(documents: List[Dict], index_name: str = "medical_cases"):
     """
     Index medical documents into Elasticsearch for efficient searching.
@@ -223,7 +222,7 @@ def elastic_search(query: str, es_client: Elasticsearch, index_name: str = "medi
         List of relevant medical documents
     """
     search_query = {
-        "size": size,
+        "size": size, # top_k
         "query": {
             "bool": {
                 "must": {
@@ -262,10 +261,10 @@ def elastic_search(query: str, es_client: Elasticsearch, index_name: str = "medi
 
 
 # 3. Prompt Generation Function (French)
-# ============================================================================
+# ==================================================
 def build_medical_prompt(question: str, search_results: List[Dict]) -> str:
     """
-    Build a robust French prompt for the medical chatbot.
+    Build a French prompt for the medical chatbot.
     
     Args:
         question: User's medical question in French
@@ -278,11 +277,12 @@ def build_medical_prompt(question: str, search_results: List[Dict]) -> str:
     system_instructions = {
         "role": "système",
         "content": """Vous êtes un assistant médical virtuel spécialisé dans les consultations patient-médecin. 
-Votre rôle est de fournir des informations médicales précises, basées sur des données fiables.
-Important: Vous n'êtes pas un substitut à un médecin réel. En cas d'urgence, recommandez une consultation médicale immédiate.
-Utilisez uniquement les informations fournies dans le CONTEXTE pour répondre.
-Si vous ne trouvez pas la réponse dans le contexte, indiquez-le clairement et recommandez de consulter un professionnel de santé.
-Répondez toujours en français, de manière claire, empathique et professionnelle."""
+            Votre rôle est de fournir des informations médicales précises, basées sur des données fiables.
+            Important: Vous n'êtes pas un substitut à un médecin réel. En cas d'urgence, recommandez une consultation médicale immédiate.
+            Utilisez uniquement les informations fournies dans le CONTEXTE pour répondre.
+            Si vous ne trouvez pas la réponse dans le contexte, indiquez-le clairement et recommandez de consulter un professionnel de santé.
+            Répondez toujours en français, de manière claire, empathique et professionnelle.
+        """
     }
     
     # Build context from search results
@@ -292,27 +292,27 @@ Répondez toujours en français, de manière claire, empathique et professionnel
     
     # User prompt template
     user_prompt_template = """# QUESTION MÉDICALE
-{question}
+    {question}
 
-# CONTEXTE MÉDICAL (Utilisez uniquement ces informations)
-{context}
+    # CONTEXTE MÉDICAL (Utilisez uniquement ces informations)
+    {context}
 
-# INSTRUCTIONS
-Répondez à la question médicale ci-dessus en utilisant UNIQUEMENT le contexte fourni.
-Structurez votre réponse comme suit:
-1. Résumé de la situation (si applicable)
-2. Informations médicales pertinentes
-3. Recommandations basées sur le contexte
-4. Avertissement sur les limites de cette consultation virtuelle
+    # INSTRUCTIONS
+    Répondez à la question médicale ci-dessus en utilisant UNIQUEMENT le contexte fourni.
+    Structurez votre réponse comme suit:
+    1. Résumé de la situation (si applicable)
+    2. Informations médicales pertinentes
+    3. Recommandations basées sur le contexte
+    4. Avertissement sur les limites de cette consultation virtuelle
 
-RÉPONSE:"""
+    RÉPONSE:"""
     
     user_prompt = user_prompt_template.format(
         question=question,
         context=context if context else "Aucun contexte médical spécifique trouvé. Recommandez une consultation médicale en personne."
     )
     
-    # Format as conversation
+    # Format as conversation (if needed)
     conversation = [
         system_instructions,
         {"role": "utilisateur", "content": user_prompt}
@@ -354,7 +354,7 @@ def get_llm_response(prompt: str, model: str = "deepseek-v3.2:cloud", provider: 
                 api_key='ollama'
             )
             response = client.chat.completions.create(
-                model="deepseek-v3.2:cloud",
+                model=model,
                 messages=[{"role": "user", "content": prompt}]
             )
             return response.choices[0].message.content
@@ -474,72 +474,6 @@ def create_gradio_interface(es_client, index_name: str = "medical_cases"):
 
 
 # ============================================================================
-# Configuration file for environment variables
-# ============================================================================
-def create_config_file():
-    """Create a configuration file for the application."""
-    config = {
-        "elasticsearch": {
-            "host": "localhost",
-            "port": 9200,
-            "index_name": "medical_cases"
-        },
-        "data": {
-            "dataset_name": "rntc/combined-medical-french",
-            "max_rows": 5000,
-            "cache_dir": "./medical_data_cache"
-        },
-        "llm": {
-            "provider": "ollama",  # "ollama", "openai", or "mock"
-            "model": "deepseek-v3.2:cloud",  # For Ollama: phi3, mistral, llama2
-            "temperature": 0.7,
-            "max_tokens": 500
-        },
-        "ui": {
-            "title": "Assistant Médical Français",
-            "port": 7860,
-            "share": False
-        }
-    }
-    
-    with open("config.json", "w", encoding="utf-8") as f:
-        json.dump(config, f, indent=2, ensure_ascii=False)
-    
-    print("✅ Fichier de configuration créé: config.json")
-
-
-# ============================================================================
-# Requirements file for dependencies
-# ============================================================================
-def create_requirements_file():
-    """Create requirements.txt for the project."""
-    requirements = """
-# Core dependencies
-datasets>=2.14.0
-pandas>=2.0.0
-elasticsearch>=8.11.0
-gradio>=4.0.0
-
-# LLM integration (choose either of this platform)
-ollama>=0.1.0
-openai>=1.0.0
-
-# Optional for better performance
-sentence-transformers>=2.2.0
-transformers>=4.35.0
-torch>=2.0.0
-
-# Utilities
-python-dotenv>=1.0.0
-    """
-    
-    with open("requirements.txt", "w") as f:
-        f.write(requirements.strip())
-    
-    print("✅ Fichier requirements.txt créé")
-
-
-# ============================================================================
 # Main Execution
 # ============================================================================
 def main():
@@ -557,6 +491,7 @@ def main():
     
     # Step 1: Load medical data
     print("\n📥 Étape 1: Chargement des données médicales...")
+    #medical_cases = load_medical_data(num_rows=500)
     medical_cases = load_medical_data_limited(num_rows=50)
     print(f"✅ {len(medical_cases)} cas médicaux chargés")
     
@@ -594,10 +529,5 @@ def main():
 )
 
 if __name__ == "__main__":
-    # Create configuration files
-    #create_config_file()
-    #create_requirements_file()
-    
-    # Run the main application
     # The entry point
     main()
