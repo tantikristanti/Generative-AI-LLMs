@@ -1,0 +1,6 @@
+datasets
+pandas
+elasticsearch<9,>=8 # elasticsearch version should be compatible with the ES Python client version
+gradio
+openai
+ollama

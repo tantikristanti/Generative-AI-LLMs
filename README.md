@@ -6,10 +6,11 @@ This repository contains experiments of implementing different models, libraries
 
 These applications are built to leverage Large Language Models (LLMs) locally:
 
-1. [PDF LangChain RAG system](https://github.com/tantikristanti/Generative-AI-LLMs-Experiments/tree/main/rag-multi-docs-langchain-gradio) is a simple PDF RAG system built using LangChain.
-2. [PDF Llama-Index RAG system](https://github.com/tantikristanti/Generative-AI-LLMs-Experiments/tree/main/rag-multi-docs-llama-index-gradio) is a simple PDF RAG system built using Llama-Index.
-3. [Multi docs LangChain RAG system](https://github.com/tantikristanti/Generative-AI-LLMs-Experiments/tree/main/rag-multi-docs-langchain-gradio) is a multi documents RAG system built using LangChain.
-4. [Multi docs Llama-Index RAG system](https://github.com/tantikristanti/Generative-AI-LLMs-Experiments/tree/main/rag-multi-docs-llama-index-gradio) is a multi documents RAG system built using Llama-Index.
+1. [French Medical Consultation](https://github.com/tantikristanti/Generative-AI-LLMs-Experiments/tree/main/french-medical-consultation) is a French medical consultation chatbot.
+2. [PDF LangChain RAG system](https://github.com/tantikristanti/Generative-AI-LLMs-Experiments/tree/main/rag-multi-docs-langchain-gradio) is a simple PDF RAG system built using LangChain.
+3. [PDF Llama-Index RAG system](https://github.com/tantikristanti/Generative-AI-LLMs-Experiments/tree/main/rag-multi-docs-llama-index-gradio) is a simple PDF RAG system built using Llama-Index.
+4. [Multi docs LangChain RAG system](https://github.com/tantikristanti/Generative-AI-LLMs-Experiments/tree/main/rag-multi-docs-langchain-gradio) is a multi documents RAG system built using LangChain.
+5. [Multi docs Llama-Index RAG system](https://github.com/tantikristanti/Generative-AI-LLMs-Experiments/tree/main/rag-multi-docs-llama-index-gradio) is a multi documents RAG system built using Llama-Index.
 
 ---
 
