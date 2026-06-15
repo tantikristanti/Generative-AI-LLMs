@@ -170,7 +170,7 @@ Python packages (install via `pip` or `uv` – see [Quick Start](#quick-start)).
 ### 1. Clone this repository
 
 ```bash
-git clone https://github.com/tantikristanti/food-nutrition-semantic-search-rag.git
+git clone https://github.com/tantikristanti/Generative-AI-LLMs/tree/main/food-nutrition-semantic-search-rag
 
 cd food-nutrition-semantic-search-rag
 ```
