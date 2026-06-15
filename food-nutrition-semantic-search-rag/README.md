@@ -1,6 +1,6 @@
 # 🍳 CIQUAL Food Search Engine – RAG‑Powered Semantic Search 🍜
 
-A complete food search engine combining **French CIQUAL nutritional data** with **Open Food Facts images**, stored in **PostgreSQL + pgvector**.
+A complete food search engine using **French CIQUAL nutritional data**, stored in **PostgreSQL + pgvector**.
 Provides **semantic vector search** and a **RAG endpoint** ready for multimodal LLMs (e.g., Ollama’s LLaVA).
 
 ---
