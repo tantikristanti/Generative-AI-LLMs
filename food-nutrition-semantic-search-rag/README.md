@@ -161,7 +161,7 @@ The PostgreSQL database schema is described in [Figure 1](#fig1).
 - **PostgreSQL** 14+ with **pgvector** extension installed. `pgvector` is the PostgreSQL extension to perform vector search.
 - **Docker** (recommended for pgvector)
 
-Python packages (install via `pip` or `uv` – see [Quick Start](#quick-start)).
+Python packages (install via `pip` or `uv` – see [Installation and Setup](#installation--setup)).
 
 ---
 
