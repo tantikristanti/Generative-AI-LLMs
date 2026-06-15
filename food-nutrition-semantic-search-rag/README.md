@@ -88,8 +88,6 @@ This project uses normalized XML files as data sources for structured data.
 │ + pgvector          │ ◄─── embeddings stored as vector(384)
 └──────────┬──────────┘
            │
-           ├─── Open Food Facts API ───► enrich with images
-           │
            ▼
 ┌─────────────────────┐
 │ FastAPI Service     │
