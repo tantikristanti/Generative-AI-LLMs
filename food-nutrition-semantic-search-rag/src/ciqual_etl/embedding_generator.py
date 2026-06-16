@@ -8,6 +8,7 @@ import logging
 import pandas as pd
 import json
 import numpy as np
+import math 
 from psycopg2.extras import execute_values
 from sentence_transformers import SentenceTransformer
 from typing import List
@@ -84,15 +85,16 @@ class FoodEmbeddingGenerator:
         """)
         self.conn.commit()
         logger.info(f"Table {self.table_name} ready (dim={vector_dim}).")
-
+    
     @staticmethod
     def _row_to_text(row: pd.Series) -> str:
         parts = []
         for col, val in row.items():
-            if pd.isna(val):
+            # Convert to string first
+            val_str = str(val).strip()
+            # Check for common NA representations
+            if val_str == '' or val_str.lower() in ('nan', 'na', 'n/a', 'none', 'null'):
                 val_str = "N/A"
-            else:
-                val_str = str(val).replace('\n', ' ').strip()
             parts.append(f"{col.strip()}: {val_str}")
         return "\n".join(parts)
 
@@ -121,10 +123,23 @@ class FoodEmbeddingGenerator:
         metadata_list = []
         for _, row in tqdm(df.iterrows(), total=len(df), desc="Processing rows"):
             texts.append(self._row_to_text(row))
+            
+            row_dict = row.to_dict()
+            # Clean NaN values since PostgreSQL's JSONB parser will refuse "NaN" string.
+            # NaN values (from pandas np.na in _row_to_text function) will be rejected by PostgreSQL's JSONB parser. 
+            # So, we need to converts "NaN" string to None (compatible with JSONB parser)
+            for k, v in row_dict.items():
+                if isinstance(v, float) and math.isnan(v):
+                    row_dict[k] = None
+                # If you have string 'nan' or 'N/A', you can also convert:
+                elif isinstance(v, str) and v.lower() in ('nan', 'na', 'n/a', 'none', 'null'):
+                    row_dict[k] = None
+            
             metadata_list.append({
                 "alim_code": row.get('alim_code'),
                 "alim_nom_fr": row.get('alim_nom_fr'),
                 "alim_nom_eng": row.get('alim_nom_eng'),
+                "row_data": row_dict
             })
 
         logger.info("Generating embeddings...")
