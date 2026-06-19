@@ -3,9 +3,9 @@ requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "ciqual_etl"
+name = "ciqual-search-engine-rag"
 version = "1.0.0"
-description = "ETL pipeline for Ciqual food data with embeddings"
+description = "Ciqual's food search engine and RAG system"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
@@ -41,3 +41,4 @@ dependencies = [
 
 [tool.setuptools.packages.find]
 where = ["src"]
+include = ["ciqual_etl*", "rag*"]   

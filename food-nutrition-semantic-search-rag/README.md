@@ -11,7 +11,10 @@ Provides **semantic vector search** and a **RAG endpoint** ready for multimodal 
   - [Excel Files Structure](#excel-files-structure)
   - [XML Files Structure](#xml-files-structure)
 - [System Architecture](#system-architecture)
-  - [Ciqual ETL & Vector Search Pipeline](#ciqual-etl--vector-search-pipeline)
+  - [Ciqual ETL &amp; Vector Search Pipeline](#ciqual-etl--vector-search-pipeline)
+  - [Ciqual ETL Pipeline File Structure](#ciqual-etl-pipeline-file-structure)
+  - [RAG System Architecture](#rag-system-architecture)
+  - [RAG File Structure](#rag-file-structure)
   - [Components](#components)
   - [Features](#features)
 - [PostgreSQL Database Schema](#postgresql-database-schema)
@@ -22,12 +25,18 @@ Provides **semantic vector search** and a **RAG endpoint** ready for multimodal 
   - [3. Install the Ciqual ETL Package](#3-install-the-ciqual-etl-package)
   - [4. Start PostgreSQL with pgvector extension (Docker)](#4-start-postgresql-with-pgvector-extension-docker)
 - [Usage Instructions](#usage-instructions)
-  - [Load Ciqual Data into PostgreSQL](#load-ciqual-data-into-postgresql)
+  - [Enrich the 2025 Ciqual Dataset](#enrich-the-2025-ciqual-dataset)
+  - [Import Ciqual Data into PostgreSQL](#import-ciqual-data-into-postgresql)
   - [Generate Text Embedding from Ciqual Data](#generate-text-embedding-from-ciqual-data)
   - [Food Search Engine (one‑time)](#food-search-engine-onetime)
-  - [Start API Server](#start-api-server)
-- [RAG with Ollama](#rag-with-ollama)
-- [Performance & Indexing](#performance--indexing)
+- [Start ETL Pipeline API Server](#start-etl-pipeline-api-server)
+  - [ETL API Endpoints](#etl-api-endpoints)
+  - [Error Handling Examples](#error-handling-examples)
+  - [Food Search Engine (one‑time)](#food-search-engine-onetime)
+- [Start RAG API Server](#start-rag-api-server)
+  - [Prerequisites](#prerequisites)
+  - [RAG API Endpoints](#rag-api-endpoints)
+- [Performance &amp; Indexing](#performance--indexing)
 - [Future Extensions](#future-extensions)
 - [Troubleshoot](#troubleshoot)
   - [Connect to PostgreSQL](#connect-to-postgresql)
@@ -76,6 +85,8 @@ This project uses normalized XML files as data sources for structured data.
 
 ## System Architecture
 
+### Ciqual ETL & Vector Search Pipeline
+
 ```
 ┌─────────────────────┐
 │ CIQUAL Dataset      │
@@ -100,9 +111,7 @@ This project uses normalized XML files as data sources for structured data.
 └─────────────────────┘
 ```
 
----
-
-### Ciqual ETL & Vector Search Pipeline
+### Ciqual ETL Pipeline File Structure
 
 ```
 ciqual_etl/
@@ -110,12 +119,12 @@ ciqual_etl/
 ├── ciqual_data.py                  # Dataclasses (FoodGroup, Food, Component, Composition, DataSource)
 ├── ciqual_etl_pipeline.py          # Pipeline orchestrator
 ├── ciqual_xml_parser.py            # CiqualXMLParser class
-├── postgres_importer.py            # PostgresImporter class (including reporting)
 ├── config.py                       # Environment variables & settings
 ├── db_utils.py                     # Database connection utilities
 ├── embedding_generator.py          # Generate and store vector embeddings for food composition data
 ├── fastapi_app.py                  # FastAPI food search engine app
 ├── food_search_engine.py           # Food search engine
+├── postgres_importer.py            # PostgresImporter class (including reporting)
 ├── run_ciqual_embeddings.py        # CLI entry point for embedding generation
 ├── run_ciqual_etl.py               # CLI entry point for ETL pipeline
 └── run_food_search_engine.py       # CLI entry point for food search engine
@@ -124,12 +133,50 @@ ciqual_etl/
 
 ---
 
+### RAG System Architecture
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│                        RAG System                                │
+├──────────────────────────────────────────────────────────────────┤
+│  Components (injectable via constructor):                        │
+│  ┌────────────────┐  ┌───────────────┐  ┌──────────────────────┐ │
+│  │ Retriever      │  │ PromptBuilder │  │ LLMClient (Ollama)   │ │
+│  │ (FoodRetriever)│  │               │  │ (multimodal)         │ │
+│  └────────────────┘  └───────────────┘  └──────────────────────┘ │
+│                                                                  │
+│  ┌──────────────┐  ┌──────────────┐                              │
+│  │ Embedder     │  │ ImageHandler │                              │
+│  │ (same model) │  │ (optional)   │                              │
+│  └──────────────┘  └──────────────┘                              │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+### RAG File Structure
+
+```
+rag/
+├── __init__.py                     # A Python package marker allowing us to import modules from it 
+├── config.py                       # Environment variables & settings
+├── food_image_retriever.py         # FoodRetriever + ImageHandler
+├── ollama_client.py                # OllamaClient
+├── prompt_builder.py               # FoodPromptBuilder
+├── rag_base.py                     # Abstract base classes
+├── rag_fastapi_app.py              # FastAPI endpoints
+└── rag_system.py                   # Main RAGSystem classengine
+
+```
+
+---
+
 ### Components
 
-- **PostgreSQL + pgvector**[[2],[3]]: Stores foods, nutrition, image URLs, and 384‑dim vectors. Enables cosine similarity search via IVFFlat index.
-- **Sentence‑Transformers** [[4]]: Converts text queries and food descriptions into vectors.
-- **FastAPI** [[5]]: REST API for semantic search and RAG.
-- **Ollama** [[6]]: Local LLM server. The `/rag` endpoint retrieves relevant foods, builds a context prompt, and asks the LLM.
+- **PostgreSQL + pgvector**[[2][2],[3][3]]: Stores foods, nutrition, image URLs, and 384‑dim vectors. Enables cosine similarity search via IVFFlat index.
+- **Sentence‑Transformers** [[4][4]]: Converts text queries and food descriptions into vectors.
+- **FastAPI** [[5][5]]: REST API for semantic search and RAG.
+- **Ollama** [[6][6]]: Local LLM server. The `/rag` endpoint retrieves relevant foods, builds a context prompt, and asks the LLM.
 
 ---
 
@@ -147,7 +194,7 @@ ciqual_etl/
 The PostgreSQL database schema is described in [Figure 1](#fig1).
 
 <figure id="fig1">
-  <img src="images/ER-Diagram-CIQUAL.png" alt="CIQUAL" height="100%" weight="100%">
+  <img src="images/ER-Diagram-CIQUAL.png" alt="CIQUAL" height="80%" weight="80%">
   <figcaption>Figure 1: Ciqual ER-Diagram.</figcaption>
 </figure>
 
@@ -242,16 +289,45 @@ docker ps
 
 ## Usage Instructions
 
-### Load Ciqual Data into PostgreSQL
+### Enrich the 2025 Ciqual Dataset
+
+This script enriches the `Table Ciqual 2025_ENG_2025_11_03.xls` dataset by adding French food names and food group labels extracted from the Ciqual XML files.
+
+**Display available command-line arguments**
+
+```bash
+uv run python python-scripts/enrich-table-ciqual-fr-food-name.py --help
+```
+
+**Run with custom input and output paths**
+
+```bash
+# Display available command-line arguments 
+uv run python python-scripts/enrich-table-ciqual-fr-food-name.py --help 
+
+# Run with custom input and output paths 
+uv run python python-scripts/enrich-table-ciqual-fr-food-name.py \ 
+  --excel-path "file1.xlsx" \ 
+  --xml-path "file2.xml" \ 
+  --xml-grp-path "file3.xml" \ 
+  --output-csv-path "out1.csv" \ 
+  --output-pq-path "out2.parquet"
+
+```
+
+### Import Ciqual Data into PostgreSQL
 
 This script parses the Ciqual XML files and loads the data into PostgreSQL tables.
 
 ```bash
+# Run the pipeline from the parent directory `ciqual-food-rag-semantic-search` by treating ciqual_etl directory as a package and resolves the imports correctly.
+# The -m flag in Python stands for “module”. It tells Python to run a module as if it were a script, rather than running a file directly by its path.
 
 # Display available command-line arguments 
 uv run python -m ciqual_etl.run_ciqual_etl --help
 
 # Import data from the specified Ciqual XML directory 
+# uv run python -m ciqual_etl.run_ciqual_etl --xml_dir [/path/to/xml]
 uv run python -m ciqual_etl.run_ciqual_etl \
   --xml-dir "data/ciqual" 
   
@@ -342,7 +418,7 @@ alim_nom_eng: Surimi, on stic...
 
 ---
 
-### Start API Server
+## Start ETL Pipeline API Server
 
 ```bash
 uv run uvicorn ciqual_etl.fastapi_app:app --reload --port 8000
@@ -352,18 +428,18 @@ uv run uvicorn ciqual_etl.fastapi_app:app --reload --port 8000
 
 This will run server at http://localhost:8000 with interactive API documentation at http://localhost:8000/docs.
 
-**API Endpoints**
+### ETL API Endpoints
 
-| Method | Path    | Description                                       |
-| ------ | ------- | ------------------------------------------------- |
-| GET    | /health | Health check & API info.                          |
-| GET    | /docs   | Auto‑generated Swagger UI documentation.          |
+| Method | Path    | Description                                           |
+| ------ | ------- | ----------------------------------------------------- |
+| GET    | /health | Health check & API info.                              |
+| GET    | /docs   | Auto‑generated Swagger UI documentation.             |
 | GET    | /search | Semantic vector search (params:`query`, `top_k`). |
-| GET    | /rag    | RAG pipeline: search + Ollama LLM.                |
+| POST   | /search | Semantic vector search (params:`query`, `top_k`). |
 
 ***1. Health Check Endpoint (GET)***
 
-- `GET` -> http://localhost:8000/health 
+- `GET` -> http://localhost:8000/health
 - Expected response (status 200), [Figure 2](#fig2):
 
 ```json
@@ -378,8 +454,8 @@ This will run server at http://localhost:8000 with interactive API documentation
 ***2. Search Endpoint – GET version***
 
 - `GET` -> `http://localhost:8000/search?query=poisson%20gras%20om%C3%A9ga%203&top_k=3`
-- `URL`: `http://localhost:8000/search` 
-- Parameters: 
+- `URL`: `http://localhost:8000/search`
+- Parameters:
   - `query`: `poisson gras oméga 3`
   - `top_k`: `3
 - Expected response (status 200), [Figure 3](#fig3):
@@ -448,11 +524,12 @@ This will run server at http://localhost:8000 with interactive API documentation
 }
 ```
 
-**Error Handling Examples**
+### Error Handling Examples
 
 ***Invalid top_k***
 
 - POST request with top_k = 0 (invalid, must be ≥1):
+
 ```json
 { "query": "healthy", "top_k": 0 }
 
@@ -481,28 +558,239 @@ This will run server at http://localhost:8000 with interactive API documentation
 
 ---
 
-### RAG with Ollama
+## Start RAG API Server
 
-- **Endpoint**: `GET /rag?q=<question>&model=<ollama_model>&top_k=<n>`
-- **Example**:
+### Prerequisites
+
+* Ensure the PostgreSQL database is running and contains the food embedding data.
+* Ensure Ollama is running locally (default `http://localhost:11434`) with the models we want to use (e.g., `llama3.2`, `llava` for multimodal).
+* The server is started with:
 
 ```bash
-curl "http://localhost:8000/rag?q=What%20foods%20are%20rich%20in%20protein%20but%20low%20in%20fat?&model=llava&top_k=5"
+uv run uvicorn rag.rag_fastapi_app:app --reload --port 8000
 ```
 
-- Response:
+> Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+
+This will run server at http://localhost:8000 with interactive API documentation at http://localhost:8000/docs.
+
+### RAG API Endpoints
+
+| Method | Path                | Description                                                                     |
+| ------ | ------------------- | ------------------------------------------------------------------------------- |
+| GET    | /health             | Health check & API info.                                                        |
+| GET    | /docs               | Auto‑generated Swagger UI documentation.                                       |
+| POST   | /rag/query          | Query the RAG system with text (params:`query`, `top_k`).                   |
+| POST   | /rag/multimodal     | Multimodal Query (Text + Image) (params:`query`, `image`, `top_k`).       |
+| POST   | /rag/generate-image | Generate Food Image (Text‑to‑Image) (params:`query`, `image`, `top_k`). |
+
+***1. Health Check Endpoint***
+
+- **Endpoint**: `GET /health`
+
+> curl
+
+```bash
+curl http://localhost:8000/health
+```
+
+> Postman
+
+* Method: `GET`
+* URL: `http://localhost:8000/health`
+* No body required.
+
+- **Expected response:**
 
 ```json
-
 {
-  "query": "What foods are rich in protein but low in fat?",
-  "retrieved_foods": [ ... ],
-  "llm_answer": "Based on the data, skinless chicken breast, fat-free yogurt, and white fish are excellent choices..."
+  "status": "ok",
+  "database": "connected"
 }
 ```
 
-> Requires Ollama running on http://localhost:11434 (default).
-> Pull a model first: `ollama pull llava`
+***2. RAG Query (Text Only)***
+
+- **Endpoint**: `POST /rag/query`
+- **Content-Type**: `application/json`
+
+> curl
+
+```bash
+curl -X POST "http://localhost:8000/rag/query" \
+  -H "Content-Type: application/json" \
+  -d '{
+        "query": "What are the nutritional values of the mixed salad with fish?",
+        "top_k": 5,
+        "model": "llama3.2",
+        "temperature": 0.7
+    }'
+```
+
+You can omit model and temperature; they default to None and 0.7 respectively.
+
+> Postman
+
+- Method: `POST`
+- URL: `http://localhost:8000/rag/query`
+- Headers: `Content-Type: application/`json
+- Body: raw JSON (example above).
+- **Expected response:**
+
+```json
+{
+  "query": "What are the nutritional values of the mixed salad with fish?",
+  "answer": "Based on the retrieved data, the nutritional values for the Mixed Salad with Fish (Salade composée avec viande ou poisson, appertisée) are:\n\n* Energy: 458 kJ per 100g\n* Protein: 8g per 100g\n* Fat: 5g per 100g\n* Carbohydrate: 6g per 100g\n* Sugars: 1g per 100g\n\nNote that the provided data does not specify the exact type of fish, so we cannot provide its individual nutritional values...",
+  "documents": [
+    {
+      "food": "Salade composée avec viande ou poisson, appertisée",
+      "score": 0.455,
+      "content": "alim_grp_code: 1\nalim_ssgrp_code: 101\nalim_ssssgrp_code: 0\nalim_grp_nom_eng: starters and dishes\nalim_ssgrp_nom_eng: mixed salads\nalim_ssssgrp_nom_eng: -\nalim_code: 25602\nalim_nom_eng: Mixed salad, with meat/fish, canned\nalim_nom_sci: N/A\nEnergy,\nRegulation\nEU No\n1169\n2011 (kJ\n100g): 458\nEnergy,\nRegulation\nEU No\n1169\n2011 (kcal\n100g): 110\nEnergy, N x\nJones'\nfactor, with\nfibres (kJ\n100g): 458\nEnergy, N x\nJones'\nfactor, with\nfibres (kcal\n100g): 110\nWater\n(g\n100g): 76,7\nProtein\n(g\n100g): 8,06\nProte...",
+      "image_url": null
+    }
+  ],
+  "model": "llama3.2"
+}
+```
+
+***3. Multimodal Query (Text + Image)***
+
+- **Endpoint:** `POST /rag/multimodal`
+- **Content-Type:** `multipart/form-data`
+
+This endpoint expects an image file and a text query. The image is used by a vision model (like LLaVA) to generate a description that is combined
+with the RAG retrieval.
+
+> curl
+
+```bash
+curl -X POST "http://localhost:8000/rag/multimodal" \
+  -F "query=What food is this and what are its nutritional values?" \
+  -F "image=@/path/to/your/food_image.jpg" \
+  -F "top_k=5" \
+  -F "model=llava" \
+  -F "temperature=0.7"
+```
+
+Adjust the image path and model name (should support vision, e.g., `llava`).
+
+> Postman
+
+* Method: `POST`
+* URL: `http://localhost:8000/rag/multimodal`
+* Headers: (Postman will set `Content-Type` automatically)
+* Body: select **form-data**
+* Parameters and add keys:
+  * `query` (Text) - add the text (e.g., "Describe this photo")
+  * `image` (File) – choose a JPEG/PNG file from your machine
+  * `top_k` (Text, optional)
+  * `model` (Text, optional)
+  * `temperature` (Text, optional)
+
+**Expected response:** Same structure as the text query, but the answer may incorporate information from the image, [Figure 5](#fig5) and [Figure 6](#fig5).
+
+```json
+{
+  "query": "Describe this photo",
+  "answer": " The image shows a whole cooked fish placed on a white plate. The fish appears to be medium-sized with a dark skin and lighter flesh. It's garnished with what looks like fennel seeds sprinkled over it. In the background, there are people who appear to be seated around a dining table, suggesting that this might have been taken in a restaurant or at home during a meal. The image is not very clear, but you can see the person's hands on the table and some items like a cup and possibly a napkin. ",
+  "documents": [],
+  "model": "llava"
+}
+```
+
+<figure id="fig5">
+  <img src="images/postman-query-rag-multimodal-fish.png" alt="query-rag-multimodal" height="100%" weight="100%">
+  <figcaption>Figure 5: Multimodal RAG Endpoint (POST).</figcaption>
+</figure>
+
+```json
+{
+  "query": "Describe this photo",
+  "answer": " This appears to be a photograph of a jar of Nutella, which is a popular hazelnut cocoa spread. The jar is placed on what looks like a kitchen counter, and you can see a reflection in the surface below it. The label \"NUTELLA\" is prominently displayed on the front of the jar, along with an image of hazelnuts. Additionally, there is a small illustration of a hazelnut tree and a cluster of hazelnuts on the jar's label. There are no visible signs indicating the quantity or brand, but this suggests that it is a product from the Nutella brand, which is made by Ferrero Rocher. ",
+  "documents": [],
+  "model": "llava"
+}
+```
+
+<figure id="fig6">
+  <img src="images/postman-query-rag-multimodal-nutella.png" alt="query-rag-multimodal" height="100%" weight="100%">
+  <figcaption>Figure 6: Multimodal RAG Endpoint (POST).</figcaption>
+</figure>
+
+***4. Generate Food Image (Text‑to‑Image)***
+
+**Endpoint:**`POST /rag/generate-image`
+**Content-Type:**`multipart/form-data`
+
+This endpoint generates a food image from a text description using a generative model (like Stable Diffusion via Ollama’s `llama3.2-vision` or similar). The response is a PNG image file.
+
+> curl
+
+```bash
+curl -X POST "http://localhost:8000/rag/generate-image" \
+  -F "description=a plate of salmon with roasted vegetables" \
+  -F "model=llama3.2-vision" \
+  --output salmon_download.png
+```
+
+The `--output` saves the PNG file locally.
+
+> Postman
+
+* Method: `POST`
+* URL: `http://localhost:8000/rag/generate-image`
+* Body:  **form-data** with:
+
+  * `description` (Text)
+  * `model` (Text, optional)
+  * `out_file` (Text, optional)
+* After sending, click **Save Response** → **Save to a file** to download the image.
+
+**Expected response:** A binary PNG image, [Figure 7](#fig7) and [Figure 8](#fig8). (If the model is not available, you’ll get a 500 error.)
+
+<figure id="fig7">
+  <img src="images/postman-query-rag-generate-image-poule-rôti.png" alt="query-rag-generate-image" height="100%" weight="100%">
+  <figcaption>Figure 7: Generate Image RAG Endpoint (POST) - Poulet Rôti.</figcaption>
+</figure>
+
+<figure id="fig8">
+  <img src="images/postman-query-rag-generate-image-salade-césar.png" alt="query-rag-generate-image" height="100%" weight="100%">
+  <figcaption>Figure 8: Generate Image RAG Endpoint (POST) - Salade César.</figcaption>
+</figure>
+
+---
+
+***5. Streaming RAG Response***
+
+**Endpoint:**`POST /rag/stream`
+**Content-Type:**`application/json`
+
+This endpoint streams the LLM response token by token, which is useful for chat‑like user interfaces.
+
+> curl
+
+```bash
+curl -X POST "http://localhost:8000/rag/stream" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "List the top 3 foods rich in vitamin C.",
+    "top_k": 3,
+    "model": "llama3.2",
+    "temperature": 0.5
+  }'
+```
+
+The output will be a continuous stream of text tokens (newline‑separated or plain). You’ll see chunks arriving one after another.
+
+> Postman
+
+* Method: `POST`
+* URL: `http://localhost:8000/rag/stream`
+* Headers: `Content-Type: application/json`
+* Body: raw JSON (same as query).
+* In Postman, the response will appear gradually as text.
+
+**Expected response:** The answer is streamed as plain text, not a JSON object.
 
 ---
 
@@ -519,7 +807,6 @@ CREATE INDEX ON foods USING hnsw (embedding vector_cosine_ops);
 
 - **IVFFlat vs HNSW** – detailed study: [PGVector: HNSW vs IVFFlat](https://medium.com/@bavalpreetsinghh/pgvector-hnsw-vs-ivfflat-a-comprehensive-study-21ce0aaab931)[[4][4]]
 
-
 ---
 
 ## Future Extensions
@@ -528,7 +815,6 @@ CREATE INDEX ON foods USING hnsw (embedding vector_cosine_ops);
 - **Full‑text + hybrid search**: Combine vector similarity with BM25 (`pgvector` sparse vectors or `pg_trgm`).
 - **Frontend dashboard**: `Streamlit` or `Next.js` app to visualise results & images.
 - **Periodic updates**: Automatically refresh `CIQUAL` when new versions are released.
-- **Multilingual support**: Use a multilingual embedding model (e.g., `distiluse-base-multilingual-cased-v2`).
 
 ---
 
