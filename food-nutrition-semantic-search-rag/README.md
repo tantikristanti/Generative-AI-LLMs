@@ -22,7 +22,7 @@ Provides **semantic vector search** and a **RAG endpoint** ready for multimodal 
 - [Installation &amp; Setup](#installation--setup)
   - [1. Clone this repository ](#1-clone-this-repository)
   - [2. Create and activate a virtual environment](#2-create-and-activate-a-virtual-environment)
-  - [3. Install the Ciqual ETL Package](#3-install-the-ciqual-etl-package)
+  - [3. Install the Ciqual ETL and RAG Packages](#3-install-the-ciqual-etl-and-rag-packages)
   - [4. Start PostgreSQL with pgvector extension (Docker)](#4-start-postgresql-with-pgvector-extension-docker)
 - [Usage Instructions](#usage-instructions)
   - [Enrich the 2025 Ciqual Dataset](#enrich-the-2025-ciqual-dataset)
@@ -235,7 +235,7 @@ source .venv/bin/activate   # Linux/macOS
 
 ---
 
-### 3. Install the Ciqual ETL Package
+### 3. Install the Ciqual ETL and RAG Packages
 
 Install the Ciqual ETL package to use them cleanly in other modules.
 
