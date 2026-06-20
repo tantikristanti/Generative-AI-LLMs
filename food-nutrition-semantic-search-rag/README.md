@@ -32,7 +32,7 @@ Provides **semantic vector search** and a **RAG endpoint** ready for multimodal 
 - [Start ETL Pipeline API Server](#start-etl-pipeline-api-server)
   - [ETL API Endpoints](#etl-api-endpoints)
   - [Error Handling Examples](#error-handling-examples)
-  - [Food Search Engine (one‑time)](#food-search-engine-onetime)
+  - [Query Examples](#query-examples)
 - [Start RAG API Server](#start-rag-api-server)
   - [Prerequisites](#prerequisites)
   - [RAG API Endpoints](#rag-api-endpoints)
@@ -453,31 +453,11 @@ This will run server at http://localhost:8000 with interactive API documentation
 
 ***2. Search Endpoint – GET version***
 
-- `GET` -> `http://localhost:8000/search?query=poisson%20gras%20om%C3%A9ga%203&top_k=3`
+- `GET` -> `http://localhost:8000/search?query=Aliment riche en protéines et faible en matières grasses&top_k=5`
 - `URL`: `http://localhost:8000/search`
-- Parameters:
-  - `query`: `poisson gras oméga 3`
-  - `top_k`: `3
-- Expected response (status 200), [Figure 3](#fig3):
-
-```json
-
-{
-  "query": "poisson gras oméga 3",
-  "top_k": 3,
-  "results": [
-    {
-      "alim_code": 12345,
-      "alim_nom_fr": "Saumon",
-      "alim_nom_eng": "Salmon",
-      "composition_text": "...",
-      "metadata": { ... },
-      "similarity": 0.92
-    },
-    ...
-  ]
-}
-```
+- Parameters, [Figure 3](#fig3):
+  - `query`: `Aliment riche en protéines et faible en matières grasses`
+  - `top_k`: `5`
 
 <figure id="fig3">
   <img src="images/postman-query-get.png" alt="query-get" height="100%" weight="100%">
@@ -494,12 +474,12 @@ This will run server at http://localhost:8000 with interactive API documentation
 - Body:
   - Raw → JSON
 
-    ```json
-    {
-      "query": "poisson gras oméga 3",
-      "top_k": 3
-    }
-    ```
+```json
+{
+  "query": "Aliment riche en protéines et faible en matières grasses",
+  "top_k": 5
+}
+```
 
 <figure id="fig4">
   <img src="images/postman-query-post.png" alt="query-post" height="100%" weight="100%">
@@ -555,6 +535,17 @@ This will run server at http://localhost:8000 with interactive API documentation
     ]
 }
 ```
+
+### Query Examples
+
+- French:
+  - "Poisson gras oméga 3"
+  - "Aliment riche en protéines et faible en matières grasses"
+  - "Fruit avec beaucoup de vitamine
+- English:
+  - "High calcium food for bone health"
+  - "Low carbohydrate vegetables"
+  - "Foods with high iron content"
 
 ---
 
@@ -687,7 +678,7 @@ Adjust the image path and model name (should support vision, e.g., `llava`).
   * `model` (Text, optional)
   * `temperature` (Text, optional)
 
-**Expected response:** Same structure as the text query, but the answer may incorporate information from the image, [Figure 5](#fig5) and [Figure 6](#fig5).
+**Expected response:** Same structure as the text query, but the answer may incorporate information from the image, [Figure 5](#fig5) and [Figure 6](#fig6).
 
 ```json
 {
