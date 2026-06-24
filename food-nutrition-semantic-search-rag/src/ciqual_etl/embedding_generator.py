@@ -17,7 +17,6 @@ from ciqual_etl import DatabaseConnection
 
 logger = logging.getLogger(__name__)
 
-
 class FoodEmbeddingGenerator:
     """
     Reads the Ciqual composition CSV, creates text representations,

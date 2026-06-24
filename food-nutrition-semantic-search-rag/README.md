@@ -11,10 +11,7 @@ Provides **semantic vector search** and a **RAG endpoint** ready for multimodal 
   - [Excel Files Structure](#excel-files-structure)
   - [XML Files Structure](#xml-files-structure)
 - [System Architecture](#system-architecture)
-  - [Ciqual ETL &amp; Vector Search Pipeline](#ciqual-etl--vector-search-pipeline)
-  - [Ciqual ETL Pipeline File Structure](#ciqual-etl-pipeline-file-structure)
-  - [RAG System Architecture](#rag-system-architecture)
-  - [RAG File Structure](#rag-file-structure)
+  - [Understanding the Full Flow](#understanding-the-full-flow)
   - [Components](#components)
   - [Features](#features)
 - [PostgreSQL Database Schema](#postgresql-database-schema)
@@ -36,6 +33,7 @@ Provides **semantic vector search** and a **RAG endpoint** ready for multimodal 
 - [Start RAG API Server](#start-rag-api-server)
   - [Prerequisites](#prerequisites)
   - [RAG API Endpoints](#rag-api-endpoints)
+- [Run the Gradio App](#run-the-gradio-app)
 - [Performance &amp; Indexing](#performance--indexing)
 - [Future Extensions](#future-extensions)
 - [Troubleshoot](#troubleshoot)
@@ -85,89 +83,35 @@ This project uses normalized XML files as data sources for structured data.
 
 ## System Architecture
 
-### Ciqual ETL & Vector Search Pipeline
+### Understanding the Full Flow
 
-```
-┌─────────────────────┐
-│ CIQUAL Dataset      │
-│ (.xls, .xml)        │
-└──────────┬──────────┘
-           │ download & parse
-           ▼
-┌─────────────────────┐
-│ PostgreSQL          │
-│ + pgvector          │ ◄─── embeddings stored as vector(384)
-└──────────┬──────────┘
-           │
-           ▼
-┌─────────────────────┐
-│ FastAPI Service     │
-│ - /search (vector)  │
-└──────────┬──────────┘
-           │
-           ▼
-┌─────────────────────┐
-│ Multimodal LLM      │
-└─────────────────────┘
-```
+**1. CIQUAL ETL Pipeline (`src/ciqual_etl`)**
 
-### Ciqual ETL Pipeline File Structure
+* **Ingestion:** Reads the French nutritional dataset (CIQUAL) from CSV or API.
+* **Cleaning & Enrichment:** Standardizes food names, nutritional values, and categories.
+* **Embedding Generation:** Uses a text embedding model (e.g., `sentence-transformers/all-MiniLM-L6-v2`) to create vector representations of food descriptions.
+* **Storage:** Stores the enriched data (name, nutrients, description, embedding) into **PostgreSQL with pgvector** for fast similarity search.
 
-```
-ciqual_etl/
-├── __init__.py                     # A Python package marker allowing us to import modules from it 
-├── ciqual_data.py                  # Dataclasses (FoodGroup, Food, Component, Composition, DataSource)
-├── ciqual_etl_pipeline.py          # Pipeline orchestrator
-├── ciqual_xml_parser.py            # CiqualXMLParser class
-├── config.py                       # Environment variables & settings
-├── db_utils.py                     # Database connection utilities
-├── embedding_generator.py          # Generate and store vector embeddings for food composition data
-├── fastapi_app.py                  # FastAPI food search engine app
-├── food_search_engine.py           # Food search engine
-├── postgres_importer.py            # PostgresImporter class (including reporting)
-├── run_ciqual_embeddings.py        # CLI entry point for embedding generation
-├── run_ciqual_etl.py               # CLI entry point for ETL pipeline
-└── run_food_search_engine.py       # CLI entry point for food search engine
+**2. RAG System (`src/rag`)**
 
-```
+* **Retriever (`Retriever` class):**
+  * Connects to the pgvector database.
+  * Converts the user’s query into an embedding and performs a cosine similarity search to retrieve the top‑k most similar food records.
+* **Prompt Builder (`PromptBuilder` class):**
+  * Constructs system and user prompts.
+  * Supports multimodal prompts (text + images) for vision‑language models.
+* **LLM Client (`LLMClient` class):**
+  * Wraps an LLM (e.g., Ollama, OpenAI).
+  * Provides `generate()` for text‑only and `generate_multimodal()` for text+image inputs.
+* **RAG Pipeline (`RAGPipeline` class):**
+  * Orchestrates the entire flow: retrieve → build prompt → generate answer.
+  * Has `query()` for text‑only and `query_multimodal()` for text+image.
 
----
+**3. FastAPI Endpoint (`/rag/multimodal`)**
 
-### RAG System Architecture
-
-```
-┌──────────────────────────────────────────────────────────────────┐
-│                        RAG System                                │
-├──────────────────────────────────────────────────────────────────┤
-│  Components (injectable via constructor):                        │
-│  ┌────────────────┐  ┌───────────────┐  ┌──────────────────────┐ │
-│  │ Retriever      │  │ PromptBuilder │  │ LLMClient (Ollama)   │ │
-│  │ (FoodRetriever)│  │               │  │ (multimodal)         │ │
-│  └────────────────┘  └───────────────┘  └──────────────────────┘ │
-│                                                                  │
-│  ┌──────────────┐  ┌──────────────┐                              │
-│  │ Embedder     │  │ ImageHandler │                              │
-│  │ (same model) │  │ (optional)   │                              │
-│  └──────────────┘  └──────────────┘                              │
-└──────────────────────────────────────────────────────────────────┘
-```
-
----
-
-### RAG File Structure
-
-```
-rag/
-├── __init__.py                     # A Python package marker allowing us to import modules from it 
-├── config.py                       # Environment variables & settings
-├── food_image_retriever.py         # FoodRetriever + ImageHandler
-├── ollama_client.py                # OllamaClient
-├── prompt_builder.py               # FoodPromptBuilder
-├── rag_base.py                     # Abstract base classes
-├── rag_fastapi_app.py              # FastAPI endpoints
-└── rag_system.py                   # Main RAGSystem classengine
-
-```
+* Receives the user’s question, an image, and parameters (`top_k`, `model`, `temperature`).
+* Calls `rag_pipeline.query_multimodal(question, images=[pil_image], top_k=top_k, model=model, temperature=temperature)`.
+* Returns the answer and retrieved documents.
 
 ---
 
@@ -563,7 +507,9 @@ uv run uvicorn rag.rag_fastapi_app:app --reload --port 8000
 
 > Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
 
-This will run server at http://localhost:8000 with interactive API documentation at http://localhost:8000/docs.
+The `--reload` flag is optional but helpful during development.
+
+Wait until you see `Application startup complete.` in the logs. You can verify the API is healthy by visiting `http://localhost:8000/health` in your browser or using `curl`.
 
 ### RAG API Endpoints
 
@@ -785,6 +731,73 @@ The output will be a continuous stream of text tokens (newline‑separated or pl
 
 ---
 
+## Run the Gradio App
+
+Before launching the Gradio interface, make sure all required services are running.
+
+**1. Verify that PostgreSQL is running**
+
+Check that the PostgreSQL container is up and running:
+
+```bash
+docker ps
+```
+
+If PostgreSQL is not listed, start the database before proceeding.
+
+**2. Start the RAG API service**
+
+The Gradio app depends on the RAG backend, which must be running first. Start the FastAPI server with:
+
+```bash
+uvicorn rag.rag_fastapi_app:app --reload --port 8000
+```
+
+Once started, the RAG service will be available at `http://localhost:8000`.
+
+**3. Launch the Gradio application**
+
+Open a new terminal and navigate to the directory containing `gradio_app.py` (`src/front-end/`). Then run:
+
+```bash
+uv run python src/front-end/gradio_app.py
+```
+
+**4. Access the application**
+
+After the application starts, you should see output similar to:
+
+```bash
+* Running on local URL:  http://0.0.0.0:7860
+```
+
+Open the displayed URL in your browser to access the Gradio interface.
+
+The application provides the following tabs:
+
+* **Text Query** – Query the RAG system using text input, [Figure 9](#fig9).
+
+<figure id="fig9">
+  <img src="images/gradio-rag-query-text.png" alt="gradio-query-text" height="100%" weight="100%">
+  <figcaption>Figure 9: Gradio-Based Interface for the Food RAG System (text based).</figcaption>
+</figure>
+
+* **Multimodal (Text + Image)** – Submit both text and image inputs, [Figure 10](#fig10).
+
+<figure id="fig10">
+  <img src="images/gradio-rag-query-multimodal.png" alt="gradio-query-multimodal" height="100%" weight="100%">
+  <figcaption>Figure 10: Gradio-Based Interface for the Food RAG System (multimodal).</figcaption>
+</figure>
+
+* **Generate Food Image** – Generate food images from text prompts, [Figure 11](#fig11).
+
+<figure id="fig11">
+  <img src="images/gradio-rag-query-generate-image.png" alt="gradio-query-generate-image" height="100%" weight="100%">
+  <figcaption>Figure 11: Gradio-Based Interface for the Food RAG System (generate food image).</figcaption>
+</figure>
+
+---
+
 ## Performance & Indexing
 
 - **Index type**: ***IVFFlat index*** on the `embedding` column with cosine distance operator (<=>).
@@ -804,7 +817,6 @@ CREATE INDEX ON foods USING hnsw (embedding vector_cosine_ops);
 
 - **User feedback loop**: Log user clicks to fine‑tune embeddings.
 - **Full‑text + hybrid search**: Combine vector similarity with BM25 (`pgvector` sparse vectors or `pg_trgm`).
-- **Frontend dashboard**: `Streamlit` or `Next.js` app to visualise results & images.
 - **Periodic updates**: Automatically refresh `CIQUAL` when new versions are released.
 
 ---

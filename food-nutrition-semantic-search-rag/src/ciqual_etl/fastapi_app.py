@@ -87,6 +87,16 @@ app = FastAPI(
     lifespan=lifespan,   
 )
 
+@app.get("/")
+async def root():
+    return {
+        "message": "Ciqual Food Search Engine API",
+        "endpoints": {
+            "/health": "Health check.",
+            "/search": "POST or GET semantic search."
+        }
+    }
+
 @app.get("/health", tags=["Health"])
 async def health_check():
     """Health check endpoint."""

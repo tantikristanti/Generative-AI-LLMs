@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Ciqual 2025 ETL package.
-It uses lazy imports where modules are imported only when the attribute is actually accessed. This breaks the circular dependency and also speeds up package loading.
+It uses lazy imports where modules are imported only when the attribute is actually accessed. 
+This breaks the circular dependency and also speeds up package loading.
 """
 
 __version__ = "1.0.0"

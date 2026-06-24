@@ -30,13 +30,13 @@ Do not make up nutritional values that are not supported by the data."""
                  include_metadata: bool = True):
         self.system_prompt = system_prompt or self.DEFAULT_SYSTEM_PROMPT
         self.include_metadata = include_metadata
-
+     
     def build_system_prompt(self, context: Optional[str] = None) -> str:
         """Build the system prompt with optional context."""
         if context:
             return f"{self.system_prompt}\n\nAdditional context: {context}"
         return self.system_prompt
-
+    
     def build_user_prompt(self, query: str, documents: List[RetrievedDocument]) -> str:
         """Build user prompt with retrieved documents."""
         
@@ -54,15 +54,51 @@ USER QUESTION: {query}
 Please provide a clear, accurate answer based only on the data above. Include specific food names and their nutritional values when relevant."""
         
         return user_prompt
-
-    def build_multimodal_user_prompt(self, query: str, 
+    
+    # Prompt for generating image description
+    def build_image_description_prompt(self) -> str:
+        """
+        Returns the prompt used to generate a textual description of a food image.
+        This description will be used to enhance the retrieval query.
+        """
+        return (
+            "Describe this food image in detail. Focus on the type of food, "
+            "ingredients, preparation style, and any visible garnishes. "
+            "Be specific and concise."
+        )
+        
+    # Multimodal user prompt with optional image_description
+    def build_multimodal_user_prompt(self, 
+                                     query: str, 
                                      documents: List[RetrievedDocument],
-                                     image: Optional[Image.Image] = None) -> Union[str, Dict]:
+                                     image: Optional[Image.Image] = None,
+                                     image_description: Optional[str] = None) -> Union[str, Dict]:
         """
         Build multimodal user prompt.
         For Ollama multimodal, returns a dict with text and images.
+        
+        Args:
+            query: User's question.
+            documents: Retrieved documents.
+            image: Optional PIL Image to include.
+            image_description: Optional textual description of the image (to be added to the prompt).
         """
+        # Build the base text prompt
         text_prompt = self.build_user_prompt(query, documents)
+        
+        # If we have an image description, append it as additional context
+        if image_description:
+            # Prepend or append – we'll add it before the user question to give the LLM more context.
+            # We'll insert it after the retrieved foods section.
+            lines = text_prompt.split('\n')
+            # Find where the "USER QUESTION" appears
+            for i, line in enumerate(lines):
+                if "USER QUESTION:" in line:
+                    # Insert the image description just before that
+                    lines.insert(i, f"IMAGE DESCRIPTION: {image_description}")
+                    lines.insert(i+1, "")  # blank line
+                    break
+            text_prompt = '\n'.join(lines)
         
         if image:
             return {

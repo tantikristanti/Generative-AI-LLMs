@@ -137,7 +137,7 @@ async def rag_query(request: QueryRequest):
         query=response.query,
         answer=response.llm_response,
         documents=[{
-            "food_en": doc.metadata.get("alim_nom_en", "Unknown"),
+            "food_en": doc.metadata.get("alim_nom_eng", "Unknown"),
             "food_fr": doc.metadata.get("alim_nom_fr", "Unknown"),
             "score": doc.score,
             "content": doc.content[:500] + "...",
@@ -178,7 +178,7 @@ async def rag_multimodal(
         query=response.query,
         answer=response.llm_response,
         documents=[{
-            "food_en": doc.metadata.get("alim_nom_en", "Unknown"),
+            "food_en": doc.metadata.get("alim_nom_eng", "Unknown"),
             "food_fr": doc.metadata.get("alim_nom_fr", "Unknown"),
             "score": doc.score,
             "content": doc.content[:500] + "...",
