@@ -49,6 +49,7 @@ Provides **semantic vector search** and a **RAG endpoint** ready for multimodal 
 - [Start RAG API Server](#start-rag-api-server)
   - [Prerequisites](#prerequisites)
   - [RAG API Endpoints](#rag-api-endpoints)
+- [Launch the Agentic RAG System](#launch-the-agentic-rag-system)
 - [Run the Gradio App](#run-the-gradio-app)
 - [Performance &amp; Indexing](#performance--indexing)
 - [Future Extensions](#future-extensions)
