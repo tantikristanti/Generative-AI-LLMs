@@ -50,6 +50,10 @@ Provides **semantic vector search** and a **RAG endpoint** ready for multimodal 
   - [Prerequisites](#prerequisites)
   - [RAG API Endpoints](#rag-api-endpoints)
 - [Launch the Agentic RAG System](#launch-the-agentic-rag-system)
+- [Start Agentic RAG API Server](#start-agentic-rag-api-server)
+  - [Prerequisites](#prerequisites-1)
+  - [Start the Server](#start-the-server)
+  - [Agentic RAG API Endpoints](#agentic-rag-api-endpoints)
 - [Run the Gradio App](#run-the-gradio-app)
 - [Performance &amp; Indexing](#performance--indexing)
 - [Future Extensions](#future-extensions)
@@ -982,6 +986,299 @@ The output will be a continuous stream of text tokens (newline‑separated or pl
 
 ---
 
+## Launch the Agentic RAG System
+
+Before launching the Agentic RAG application, ensure that all required services, models, and resources are properly configured:
+
+* Verify that the PostgreSQL database is running and contains the food embedding data.
+* Download the SymSpell frequency dictionary file: `frequency_dictionary_en_82_765.txt`.
+* Ensure that the embedding model (for example, `paraphrase-multilingual-MiniLM-L12-v2`) and the cross-encoder model (for example, `ms-marco-MiniLM-L6-v2`) are available locally.
+* Confirm that Ollama is running on the default endpoint (`http://localhost:11434`) and that the required models are installed, such as `llama3.2` and `llava` for multimodal support.
+
+After completing the setup, start the Agentic RAG application with:
+
+```bash
+uv run python src/agentic_rag/run_agentic_rag.py
+```
+
+> Query: `What are the nutritional values of the mixed salad with fish?`
+> Expected output:
+
+```bash
+==================================================
+Query: What are the nutritional values of the mixed salad with fish?
+Answer: Based on the provided context, here is the information about the nutritional values of a mixed salad with fish:
+
+* Energy: 110 kcal/100g
+* Water content: 76.7g/100g
+* Protein content: 8.06g/100g
+* Fat content: 5.3g/100g
+* Saturated fat content: 0.3g/100g
+* Cholesterol content: 15.2mg/100g
+* Sodium content: 381mg/100g
+* Calcium content: 22mg/100g
+* Potassium content: 220mg/100g
+
+Additionally, the mixed salad with fish is a good source of:
+
+* Vitamin A activity (retinol equivalent): 75.6µg/100g
+* Beta-carotene: 781µg/100g
+* Vitamin D3 (cholecalciferol): 0.44µg/100g
+* Alpha-tocopherol (vitamine E): 2.04mg/100g
+
+Please note that the nutritional values provided are for a serving size of 100g, and may vary depending on the specific ingredients and portion sizes used.
+Total sources: 1
+Follow-up questions: ['Is the fish used in the mixed salad wild-caught or farmed?', 'What are the typical cooking methods for the fish served with the mixed salad?', 'Are there any specific nutritional benefits associated with the type of fish commonly paired with mixed salads?']
+
+Refined query:
+  Original: What are the nutritional values of the mixed salad with fish?
+  Corrected: what are the nutritional values of the mixed salad with fish
+  Rewritten: "What is the nutritional content of a mixed green salad with grilled or baked fish?"
+  Variations: "What is the nutritional content of a mixed green salad with grilled or baked fish?", "What nutrients are found in a typical serving size of mixed greens, along with grilled or baked salmon?", "How does the nutritional profile of a mixed green salad change when paired with baked cod versus grilled tilapia?"
+==================================================
+
+Source 1: alim_grp_code: 1
+alim_ssgrp_code: 101
+alim_ssssgrp_code: 0
+alim_grp_nom_eng: starters and dishes
+alim_ssgrp_nom_eng: mixed salads
+alim_ssssgrp_nom_eng: -
+alim_code: 25602
+alim_nom_eng: Mixed salad, wi... (score: -5.117337226867676)
+```
+
+---
+
+## Start Agentic RAG API Server
+
+### Prerequisites
+
+* Same as the classic RAG: `PostgreSQL` with `pgvector` and food embedding table, Ollama running locally.
+* The Agentic RAG system additionally requires:
+  * A cross‑encoder model for reranking (e.g., `cross-encoder/ms-marco-MiniLM-L6-v2`).
+  * A SymSpell dictionary for spelling correction (path to `frequency_dictionary_en_82_765.txt`).
+  * All these are configurable via `config/rag_config.yaml`.
+
+---
+
+### Start the Server
+
+```bash
+uv run uvicorn src.agentic_rag.agentic_rag_fastapi_app:app --reload --port 8000
+```
+
+* The server runs at `http://127.0.0.1:8000`.
+* The `--reload` flag is useful during development.
+* Wait for `Application startup complete.` in the logs. Verify with `http://localhost:8000/health`.
+
+---
+
+### Agentic RAG API Endpoints
+
+| Method | Path                      | Description                                                                                   |
+| ------ | ------------------------- | --------------------------------------------------------------------------------------------- |
+| GET    | `/health`               | Health check with database connectivity.                                                      |
+| GET    | `/docs`                 | Auto‑generated Swagger UI documentation.                                                     |
+| POST   | `/agentic/query`        | **Full agentic query**– refines, searches, reranks, generates answer with follow‑ups. |
+| POST   | `/agentic/query/stream` | Stream the answer token‑by‑token.                                                           |
+| POST   | `/agentic/search`       | **Search only**– returns raw documents (no LLM). Useful for debugging.                 |
+| POST   | `/agentic/refine`       | **Query refinement only**– returns corrected, rewritten, and variations.               |
+
+---
+
+***1. Health Check***
+
+**Endpoint:**`GET /health`
+
+> curl
+
+```bash
+curl http://localhost:8000/health
+```
+
+> Postman
+
+* Method: `GET`
+* URL: `http://localhost:8000/health`
+* No body required.
+
+**Response:**
+
+```json
+{
+    "status": "ok",
+    "database": "connected",
+    "system": "agentic-rag-food-nutrition-system"
+}
+```
+
+---
+
+***2. Full Agentic Query (Text Only)***
+
+**Endpoint:**`POST /agentic/query`
+**Content‑Type:**`application/json`
+
+This endpoint orchestrates the entire agentic pipeline:
+
+1. **Spelling correction** (SymSpell)
+2. **LLM‑based query rewriting** (Ollama)
+3. **Multi‑query generation** (up to 3 variations)
+4. **Embedding search** on all variations (pgvector)
+5. **Cross‑encoder reranking** (re‑orders results)
+6. **LLM answer generation** with citations
+7. **Follow‑up question suggestions**
+
+> curl
+
+```bash
+curl -X POST "http://localhost:8000/agentic/query" \
+  -H "Content-Type: application/json" \
+  -d '{
+        "query": "What is the protien content of the mixed salad with fihs?",
+        "top_k": 5
+      }'
+```
+
+> Postman
+
+- Method: `POST`
+- URL: `http://localhost:8000/agentic/query`
+- Headers: `Content-Type: application/json`
+- Body: raw - JSON (same as query).
+- Request body (the typos `protien` and `fihs` in the `query` was intentional, to test if the agent could correct it.)
+
+```json
+{
+  "query": "What is the protien content of the mixed salad with fihs?",
+  "top_k": 5,
+  "model": "llama3.2",
+  "temperature": 0.7
+}
+```
+
+* `top_k` (optional, default 5): number of final documents to return.
+* `model` and `temperature` are passed to the LLM (optional).
+
+- **Expected response (truncated):**
+
+```json
+{
+    "query": "What is the protien content of the mixed salad with fihs?",
+    "answer": "I couldn't find any relevant information in the database for your query.",
+    "sources": [],
+    "follow_ups": [
+        "Try rephrasing your question.",
+        "What food are you interested in?"
+    ],
+    "total_sources": 0,
+    "strategies_used": [
+        "refined_search"
+    ],
+    "refined_query": {
+        "original": "What is the protien content of the mixed salad with fihs?",
+        "corrected": "what is the protein content of the mixed salad with fish",
+        "rewritten": "\"What is the protein content of a mixed salad containing fish?\"",
+        "variations": [
+            "\"What is the protein content of a mixed salad containing fish?\"",
+            "\"What types of protein are found in a mixed salad with fish?\"",
+            "This query focuses on the specific aspect of identifying the type(s) of protein present in the dish, rather than just the quantity or amount."
+        ]
+    },
+    "model": "agentic-rag-food-nutrition-system"
+}
+```
+
+As demonstrated by the query **What is the ***protien*** content of the mixed salad with ***fihs***?**, which intentionally contains the misspellings ***"protien"*** (instead of "protein") and ***fihs*** (instead of "fish"), the agent can automatically detect and correct spelling errors. It can also reformulate or suggest improved queries to optimize retrieval and enhance the quality of the LLM's responses.
+
+The following ([Figure 12](#fig12)) is the response generated by the LLM after the agent refined the original user query to improve its clarity and retrieval effectiveness.
+
+<figure id="fig12">
+  <img src="images/postman-query-agentic-rag.png" alt="gradio-query-text" height="100%" weight="100%">
+  <figcaption>Figure 12: Agentic RAG Query.</figcaption>
+</figure>
+
+---
+
+***3. Streaming Agentic Response***
+
+**Endpoint:**`POST /agentic/query/stream`
+**Content‑Type:**`application/json`
+
+Streams the generated answer token by token. Useful for real‑time UIs.
+
+```bash
+curl -X POST "http://localhost:8000/agentic/query/stream" \
+  -H "Content-Type: application/json" \
+  -d '{"query": "List the top 3 foods rich in vitamin C."}'
+```
+
+The response is plain text streamed incrementally.
+
+---
+
+***4. Search Only (No LLM)***
+
+**Endpoint:**`POST /agentic/search`
+**Content‑Type:**`multipart/form-data`
+
+Performs the full retrieval pipeline (correction, rewriting, variations, reranking) but returns **only the documents** – no answer generation. Excellent for debugging or when you want raw results.
+
+```bash
+curl -X POST "http://localhost:8000/agentic/search" \
+  -F "query=protein in chicken" \
+  -F "top_k=5"
+```
+
+**Response:**
+
+```json
+{
+  "query": "protein in chicken",
+  "documents": [
+    {
+      "content": "Chicken, breast, raw...",
+      "score": 0.87,
+      "metadata": { "alim_code": "12345" }
+    }
+  ],
+  "total_found": 5
+}
+```
+
+---
+
+***5. Query Refinement Only***
+
+**Endpoint:**`POST /agentic/refine`
+**Content‑Type:**`multipart/form-data`
+
+Runs only the refinement steps (correction, rewriting, variations) without performing any search.
+
+```bash
+curl -X POST "http://localhost:8000/agentic/refine" \
+  -F "query=protien in chiken"
+```
+
+**Response:**
+
+```json
+{
+  "original": "protien in chiken",
+  "corrected": "protein in chicken",
+  "rewritten": "What is the protein content of chicken?",
+  "variations": [
+    "What is the protein content of chicken?",
+    "protein in chicken",
+    "chicken protein"
+  ]
+}
+```
+
+This is useful for inspecting the agent’s reasoning before executing a full query.
+
+---
+
 ## Run the Gradio App
 
 Before launching the Gradio interface, make sure all required services are running.
@@ -1046,69 +1343,6 @@ The application provides the following tabs:
   <img src="images/gradio-rag-query-generate-image.png" alt="gradio-query-generate-image" height="100%" weight="100%">
   <figcaption>Figure 11: Gradio-Based Interface for the Food RAG System (generate food image).</figcaption>
 </figure>
-
----
-
-## Launch the Agentic RAG System
-
-Before launching the Agentic RAG application, ensure that all required services, models, and resources are properly configured:
-
-* Verify that the PostgreSQL database is running and contains the food embedding data.
-* Download the SymSpell frequency dictionary file: `frequency_dictionary_en_82_765.txt`.
-* Ensure that the embedding model (for example, `paraphrase-multilingual-MiniLM-L12-v2`) and the cross-encoder model (for example, `ms-marco-MiniLM-L6-v2`) are available locally.
-* Confirm that Ollama is running on the default endpoint (`http://localhost:11434`) and that the required models are installed, such as `llama3.2` and `llava` for multimodal support.
-
-After completing the setup, start the Agentic RAG application with:
-
-```bash
-uv run python src/agentic_rag/run_agentic_rag.py
-```
-
-> Query: `What are the nutritional values of the mixed salad with fish?`
-Expected output:
-
-```bash
-==================================================
-Query: What are the nutritional values of the mixed salad with fish?
-Answer: Based on the provided context, here is the information about the nutritional values of a mixed salad with fish:
-
-* Energy: 110 kcal/100g
-* Water content: 76.7g/100g
-* Protein content: 8.06g/100g
-* Fat content: 5.3g/100g
-* Saturated fat content: 0.3g/100g
-* Cholesterol content: 15.2mg/100g
-* Sodium content: 381mg/100g
-* Calcium content: 22mg/100g
-* Potassium content: 220mg/100g
-
-Additionally, the mixed salad with fish is a good source of:
-
-* Vitamin A activity (retinol equivalent): 75.6µg/100g
-* Beta-carotene: 781µg/100g
-* Vitamin D3 (cholecalciferol): 0.44µg/100g
-* Alpha-tocopherol (vitamine E): 2.04mg/100g
-
-Please note that the nutritional values provided are for a serving size of 100g, and may vary depending on the specific ingredients and portion sizes used.
-Total sources: 1
-Follow-up questions: ['Is the fish used in the mixed salad wild-caught or farmed?', 'What are the typical cooking methods for the fish served with the mixed salad?', 'Are there any specific nutritional benefits associated with the type of fish commonly paired with mixed salads?']
-
-Refined query:
-  Original: What are the nutritional values of the mixed salad with fish?
-  Corrected: what are the nutritional values of the mixed salad with fish
-  Rewritten: "What is the nutritional content of a mixed green salad with grilled or baked fish?"
-  Variations: "What is the nutritional content of a mixed green salad with grilled or baked fish?", "What nutrients are found in a typical serving size of mixed greens, along with grilled or baked salmon?", "How does the nutritional profile of a mixed green salad change when paired with baked cod versus grilled tilapia?"
-==================================================
-
-Source 1: alim_grp_code: 1
-alim_ssgrp_code: 101
-alim_ssssgrp_code: 0
-alim_grp_nom_eng: starters and dishes
-alim_ssgrp_nom_eng: mixed salads
-alim_ssssgrp_nom_eng: -
-alim_code: 25602
-alim_nom_eng: Mixed salad, wi... (score: -5.117337226867676)
-```
 
 ---
 
