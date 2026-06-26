@@ -26,3 +26,4 @@ gradio
 matplotlib 
 seaborn 
 pydantic
+symspellpy

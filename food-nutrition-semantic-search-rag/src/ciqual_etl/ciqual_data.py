@@ -6,6 +6,18 @@ from dataclasses import dataclass
 
 # Use @dataclass decorator to automatically generate boilerplate code for class data (e.g., __init__).
 @dataclass
+class Food:
+    """Food item from `alim_2025_11_03.xml` XML file."""
+    alim_code: int
+    alim_nom_eng: Optional[str]
+    alim_nom_fr: Optional[str]
+    alim_nom_sci: Optional[str]
+    facteur_jones: Optional[float]
+    alim_grp_code: str
+    alim_ssgrp_code: str
+    alim_ssssgrp_code: str
+
+@dataclass
 class FoodGroup:
     """Food group from `alim_grp_2025_11_03.xml` XML file."""
     alim_grp_code: str
@@ -17,18 +29,6 @@ class FoodGroup:
     alim_grp_nom_fr: Optional[str]
     alim_ssgrp_nom_fr: Optional[str]
     alim_ssssgrp_nom_fr: Optional[str]
-
-@dataclass
-class Food:
-    """Food item from `alim_2025_11_03.xml` XML file."""
-    alim_code: int
-    alim_nom_eng: Optional[str]
-    alim_nom_fr: Optional[str]
-    alim_nom_sci: Optional[str]
-    facteur_jones: Optional[float]
-    alim_grp_code: str
-    alim_ssgrp_code: str
-    alim_ssssgrp_code: str
 
 @dataclass
 class Component:

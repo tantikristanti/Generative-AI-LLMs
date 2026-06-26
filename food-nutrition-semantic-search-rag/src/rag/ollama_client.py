@@ -12,7 +12,8 @@ from ollama import generate
 import io
 from pathlib import Path
 
-from rag import BaseLLMClient
+# Sibling module imports
+from .rag_base import BaseLLMClient
 
 logger = logging.getLogger(__name__)
 

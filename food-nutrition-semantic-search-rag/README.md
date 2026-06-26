@@ -12,14 +12,30 @@ Provides **semantic vector search** and a **RAG endpoint** ready for multimodal 
   - [XML Files Structure](#xml-files-structure)
 - [System Architecture](#system-architecture)
   - [Understanding the Full Flow](#understanding-the-full-flow)
-  - [Components](#components)
-  - [Features](#features)
+  - [How Agentic RAG Extends the Existing Pipeline](#how-agentic-rag-extends-the-existing-pipeline)
+- [Technology Stack](#technology-stack)
+- [Components](#components)
+  - [Data Layer](#data-layer)
+  - [Retrieval Layer](#retrieval-layer)
+  - [RAG Layer](#rag-layer)
+  - [Agentic Layer](#agentic-layer)
+  - [API Layer](#api-layer)
+- [Features](#features)
+  - [Data Processing](#data-processing)
+  - [Semantic Search](#semantic-search)
+  - [RAG Capabilities](#rag-capabilities)
+  - [Agentic RAG Capabilities](#agentic-rag-capabilities)
+  - [API &amp; Deployment](#api--deployment)
 - [PostgreSQL Database Schema](#postgresql-database-schema)
 - [Requirements](#requirements)
+  - [System Requirements](#system-requirements)
+  - [Python Dependencies](#python-dependencies)
+  - [Hugging Face Models](#hugging-face-models)
+  - [SymSpell Dictionary Setup](#symspell-dictionary-setup)
 - [Installation &amp; Setup](#installation--setup)
   - [1. Clone this repository ](#1-clone-this-repository)
   - [2. Create and activate a virtual environment](#2-create-and-activate-a-virtual-environment)
-  - [3. Install the Ciqual ETL and RAG Packages](#3-install-the-ciqual-etl-and-rag-packages)
+  - [3. Install the Ciqual ETL, RAG, and Agentic RAG Packages](#3-install-the-ciqual-etl-rag-and-agentic-rag-packages)
   - [4. Start PostgreSQL with pgvector extension (Docker)](#4-start-postgresql-with-pgvector-extension-docker)
 - [Usage Instructions](#usage-instructions)
   - [Enrich the 2025 Ciqual Dataset](#enrich-the-2025-ciqual-dataset)
@@ -90,12 +106,14 @@ This project uses normalized XML files as data sources for structured data.
 * **Ingestion:** Reads the French nutritional dataset (CIQUAL) from CSV or API.
 * **Cleaning & Enrichment:** Standardizes food names, nutritional values, and categories.
 * **Embedding Generation:** Uses a text embedding model (e.g., `sentence-transformers/all-MiniLM-L6-v2`) to create vector representations of food descriptions.
-* **Storage:** Stores the enriched data (name, nutrients, description, embedding) into **PostgreSQL with pgvector** for fast similarity search.
+* **Storage:** Stores the enriched data (name, nutrients, description, embedding) into `PostgreSQL` with `pgvector` for fast similarity search.
+
+---
 
 **2. RAG System (`src/rag`)**
 
 * **Retriever (`Retriever` class):**
-  * Connects to the pgvector database.
+  * Connects to the `pgvector` database.
   * Converts the user’s query into an embedding and performs a cosine similarity search to retrieve the top‑k most similar food records.
 * **Prompt Builder (`PromptBuilder` class):**
   * Constructs system and user prompts.
@@ -107,6 +125,8 @@ This project uses normalized XML files as data sources for structured data.
   * Orchestrates the entire flow: retrieve → build prompt → generate answer.
   * Has `query()` for text‑only and `query_multimodal()` for text+image.
 
+---
+
 **3. FastAPI Endpoint (`/rag/multimodal`)**
 
 * Receives the user’s question, an image, and parameters (`top_k`, `model`, `temperature`).
@@ -115,21 +135,172 @@ This project uses normalized XML files as data sources for structured data.
 
 ---
 
-### Components
+**4. Agentic RAG Layer (`src/agentic_rag`)**
 
-- **PostgreSQL + pgvector**[[2][2],[3][3]]: Stores foods, nutrition, image URLs, and 384‑dim vectors. Enables cosine similarity search via IVFFlat index.
-- **Sentence‑Transformers** [[4][4]]: Converts text queries and food descriptions into vectors.
-- **FastAPI** [[5][5]]: REST API for semantic search and RAG.
-- **Ollama** [[6][6]]: Local LLM server. The `/rag` endpoint retrieves relevant foods, builds a context prompt, and asks the LLM.
+The `agentic_rag` package introduces an intelligent orchestration layer on top of the traditional RAG pipeline. Instead of executing a single retrieval step, it allows multiple specialized agents to collaborate and adapt their behavior based on search quality and user intent.
+
+* **Configuration (`config.py`)**
+  * Centralizes model settings, search parameters, retry limits, and agent-specific configurations.
+  * Makes the agent system easy to tune without modifying implementation code.
+* **Tools (`tools/`)**
+  * Reusable functions that agents use to perform actions.
+  * `search_tools.py` handles document retrieval and similarity search.
+  * `query_tools.py` provides query refinement capabilities such as typo correction, query expansion, and reformulation.
+  * `response_tools.py` prepares citations, formats responses, and generates follow-up suggestions.
+* **Agents (`agents/`)**
+  * `base_agent.py` defines the common interface shared by all agents.
+  * `query_refiner.py` improves user queries before retrieval, helping recover from spelling mistakes, ambiguous wording, or poorly phrased questions.
+  * `search_agent.py` executes searches, evaluates retrieval quality, and can retry using alternative query formulations when results are weak.
+  * `orchestrator.py` coordinates the entire workflow, deciding which agent to invoke and combining their outputs into a coherent process.
+* **Memory (`memory/`)**
+  * `conversation_memory.py` stores conversation history and previous interactions.
+  * Enables context-aware retrieval and multi-turn question answering.
+* **Main System (`agentic_rag_system.py`)**
+  * Serves as the entry point for the Agentic RAG application.
+  * Connects the orchestrator, agents, tools, memory, and existing RAG pipeline into a single executable workflow.
 
 ---
 
-### Features
+### How Agentic RAG Extends the Existing Pipeline
 
-- Semantic search using cosine similarity on pgvector.
-- IVFFlat index for fast approximate nearest neighbour search.
-- FastAPI endpoints with auto‑generated OpenAPI docs (`/docs`)
-- RAG endpoint that integrates retrieved foods with Ollama (multimodal models like LLaVA).
+The original RAG system follows a fixed sequence:
+
+```
+User Query
+    ↓
+Retrieve Documents
+    ↓
+Build Prompt
+    ↓
+Generate Answer
+```
+
+The Agentic RAG system introduces an adaptive reasoning layer:
+
+```
+User Query
+    ↓
+Orchestrator Agent
+    ↓
+Query Refiner Agent
+    ↓
+Search Agent
+    ↓
+Evaluate Results
+    ↓
+(If needed) Retry with Improved Query
+    ↓
+Response Agent
+    ↓
+Final Answer
+```
+
+This additional layer allows the system to recover from misspellings, ambiguous questions, and low-quality retrieval results before generating a response. Instead of assuming the first search is correct, the system can iteratively improve its search strategy and deliver more reliable answers.
+
+---
+
+## Technology Stack
+
+The following table summarizes the technologies used to build the production-ready **Food Nutrition Semantic Search, RAG, and Agentic RAG system**.
+
+| Component                      | Technology                                  |
+| ------------------------------ | ------------------------------------------- |
+| Database                       | PostgreSQL                                  |
+| Vector Search                  | pgvector                                    |
+| API Framework                  | FastAPI                                     |
+| Embeddings                     | SentenceTransformers (`all-MiniLM-L6-v2`) |
+| ORM (Object Relational Mapper) | SQLAlchemy                                  |
+| Local LLM                      | Ollama                                      |
+| Cloud LLM (optional)           | OpenAI                                      |
+| Agent Framework                | Custom Agent Architecture                   |
+| Agent Memory                   | Conversation Memory                         |
+| Retrieval Pipeline             | Custom RAG Pipeline                         |
+| Query Refinement               | LLM-based Query Refiner Agent               |
+| Agent Orchestration            | Orchestrator Agent                          |
+| Image Processing               | Pillow (PIL)                                |
+| Food Nutrition Dataset         | Ciqual                                      |
+| Food Images                    | Open Food Facts / Wikimedia Commons         |
+| Configuration Management       | Pydantic Settings                           |
+| Containerization               | Docker                                      |
+
+---
+
+## Components
+
+### Data Layer
+
+* **PostgreSQL + pgvector**: Stores food records, nutritional information, image URLs, and vector embeddings. Supports efficient cosine similarity search through vector indexes.
+* **CIQUAL ETL Pipeline**: Downloads, cleans, enriches, and embeds food data before loading it into PostgreSQL.
+
+### Retrieval Layer
+
+* **Sentence-Transformers**: Generates embeddings for food descriptions and user queries using a lightweight multilingual embedding model.
+* **Retriever**: Converts user questions into embeddings and performs top-k semantic search against pgvector.
+
+### RAG Layer
+
+* **Prompt Builder**: Creates structured prompts from retrieved food records and user queries.
+* **LLM Client** : Provides a unified interface for local (Ollama) and cloud-based (OpenAI) language models.
+* **RAG Pipeline**: Implements the classic Retrieve → Augment → Generate workflow for both text and multimodal queries.
+
+### Agentic Layer
+
+* **Orchestrator Agent**: Coordinates the overall workflow and manages communication between specialized agents.
+* **Query Refiner Agent**: Detects spelling mistakes, rewrites ambiguous queries, and generates alternative search formulations.
+* **Search Agent**: Executes retrieval operations, evaluates search quality, and retries searches when necessary.
+* **Response Agent**: Generates the final user-facing response, formats sources, and suggests follow-up questions.
+* **Conversation Memory**: Maintains chat history and contextual information for multi-turn interactions.
+* **Agent Tools**:
+  * **Query Tools** for query correction and expansion.
+  * **Search Tools** for retrieval operations.
+  * **Response Tools** for answer generation and citation formatting.
+
+### API Layer
+
+* **FastAPI**: Exposes REST endpoints for semantic search, RAG, multimodal RAG, and Agentic RAG workflows with automatically generated OpenAPI documentation.
+
+---
+
+## Features
+
+### Data Processing
+
+* Automated ingestion of the CIQUAL food composition database.
+* Cleaning and normalization of food names and nutritional information.
+* Batch embedding generation for efficient vector indexing.
+* Image enrichment using Open Food Facts and Wikimedia Commons.
+
+### Semantic Search
+
+* Semantic similarity search using Sentence-Transformers embeddings.
+* Cosine similarity retrieval powered by `pgvector`.
+* Approximate nearest-neighbor search using `IVFFlat` indexes.
+* Multilingual retrieval capabilities.
+
+### RAG Capabilities
+
+* Traditional Retrieve-Augment-Generate (RAG) pipeline.
+* Context-aware answer generation using retrieved food documents.
+* Multimodal RAG support for text and image-based food questions.
+* Support for local LLMs (Ollama) and cloud models (OpenAI).
+
+### Agentic RAG Capabilities
+
+* Multi-agent architecture with clear separation of responsibilities.
+* Automatic query refinement and typo correction.
+* Adaptive retrieval strategies when initial searches fail.
+* Search quality evaluation and retry mechanisms.
+* Conversation-aware interactions through memory management.
+* Tool-augmented reasoning for retrieval and response generation.
+* Source-aware answer formatting and follow-up question suggestions.
+
+### API & Deployment
+
+* FastAPI REST endpoints with interactive OpenAPI documentation (`/docs`).
+* Modular architecture designed for extensibility and maintainability.
+* Docker-ready deployment.
+* Easy integration with frontends, chat applications, and external services.
+* Extensible foundation for future enhancements such as human feedback loops, additional data sources, web search tools, and advanced multi-agent workflows.
 
 ---
 
@@ -146,11 +317,80 @@ The PostgreSQL database schema is described in [Figure 1](#fig1).
 
 ## Requirements
 
-- **Python** 3.9+
-- **PostgreSQL** 14+ with **pgvector** extension installed. `pgvector` is the PostgreSQL extension to perform vector search.
-- **Docker** (recommended for pgvector)
+Before installing and running the application, ensure the following dependencies are available:
 
-Python packages (install via `pip` or `uv` – see [Installation and Setup](#installation--setup)).
+### System Requirements
+
+- **Python** 3.9 or higher
+- **PostgreSQL** 14 or higher with the **pgvector** extension enabled
+  - `pgvector` is a PostgreSQL extension that provides efficient vector similarity search capabilities.
+- **Docker** (recommended) for running PostgreSQL with pgvector in a containerized environment.
+
+### Python Dependencies
+
+Install the required Python packages using either `pip` or `uv` (see the [Installation and Setup](#installation--setup) section).
+
+### Hugging Face Models
+
+The application requires Hugging Face embedding models and cross-encoder reranking models.
+
+To download Hugging Face models locally, install and configure the Hugging Face CLI:
+
+1. **Install Hugging Face CLI**
+
+```bash
+python -m pip install --force-reinstall "huggingface_hub[cli]"
+```
+
+2. **Refresh pyenv shims**
+
+   (Required when using `pyenv` to ensure the CLI executable is correctly registered.)
+
+```bash
+pyenv rehash
+```
+
+3. **Verify the Hugging Face CLI installation**
+
+```bash
+hf --help
+```
+
+4. **Download the embedding model**
+
+```bash
+hf download sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2 \
+  --local-dir ./embeddings/sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
+```
+
+5. **Download the cross-encoder reranking model**
+
+```bash
+hf download cross-encoder/ms-marco-MiniLM-L6-v2 \
+  --local-dir ./cross-encoder/ms-marco-MiniLM-L6-v2
+```
+
+The downloaded model will be stored locally and loaded from this directory during application runtime.
+
+### SymSpell Dictionary Setup
+
+This project uses **[SymSpell](https://github.com/wolfgarbe/SymSpell)** for spelling correction and fuzzy matching based on the **Symmetric Delete spelling correction algorithm**.
+
+To enable SymSpell functionality, download the `frequency_dictionary_en_82_765.txt` file and place it in the `dictionary/SymSpell/` directory.
+
+```bash
+mkdir -p dictionary/SymSpell
+wget -O dictionary/SymSpell/frequency_dictionary_en_82_765.txt \
+     https://raw.githubusercontent.com/wolfgarbe/SymSpell/master/SymSpell/frequency_dictionary_en_82_765.txt
+```
+
+Or download it with Jupyter Notebook:
+
+```python
+from sentence_transformers import CrossEncoder
+model = CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2')
+model.save_pretrained('dictionary/SymSpell')
+```
 
 ---
 
@@ -179,20 +419,32 @@ source .venv/bin/activate   # Linux/macOS
 
 ---
 
-### 3. Install the Ciqual ETL and RAG Packages
+### 3. Install the Ciqual ETL, RAG, and Agentic RAG Packages
 
-Install the Ciqual ETL package to use them cleanly in other modules.
-
-- `-e` stands for editable mode. The package is installed in place, so changes to the source code are immediately reflected without reinstalling.
-- `.` refers to the current directory (which should contain a pyproject.toml or setup.py).
+If the packages were previously installed, remove any cached build metadata:
 
 ```bash
-# Install the package with pip
-pip install -e .
+rm -rf src/*.egg-info
+```
 
-# Or using uv
+Next, install the project in editable (`-e`) mode.
+
+Using `uv`:
+
+```bash
 uv pip install -e .
 ```
+
+Or using pip:
+
+```bash
+pip install -e .
+```
+
+> **Notes**
+>
+> * The `-e` (editable) option installs the project in place, allowing code changes to take effect immediately without requiring reinstallation.
+> * The `.` specifies the current project directory, which should contain a `pyproject.toml` or `setup.py` file.
 
 ---
 
@@ -256,7 +508,6 @@ uv run python python-scripts/enrich-table-ciqual-fr-food-name.py \
   --xml-grp-path "file3.xml" \ 
   --output-csv-path "out1.csv" \ 
   --output-pq-path "out2.parquet"
-
 ```
 
 ### Import Ciqual Data into PostgreSQL
@@ -456,7 +707,6 @@ This will run server at http://localhost:8000 with interactive API documentation
 
 ```json
 { "query": "healthy", "top_k": 0 }
-
 ```
 
 - Expected response (status 422):
@@ -760,7 +1010,7 @@ Once started, the RAG service will be available at `http://localhost:8000`.
 Open a new terminal and navigate to the directory containing `gradio_app.py` (`src/front-end/`). Then run:
 
 ```bash
-uv run python src/front-end/gradio_app.py
+uv run python src/front_end/gradio_app.py
 ```
 
 **4. Access the application**
@@ -795,6 +1045,69 @@ The application provides the following tabs:
   <img src="images/gradio-rag-query-generate-image.png" alt="gradio-query-generate-image" height="100%" weight="100%">
   <figcaption>Figure 11: Gradio-Based Interface for the Food RAG System (generate food image).</figcaption>
 </figure>
+
+---
+
+## Launch the Agentic RAG System
+
+Before launching the Agentic RAG application, ensure that all required services, models, and resources are properly configured:
+
+* Verify that the PostgreSQL database is running and contains the food embedding data.
+* Download the SymSpell frequency dictionary file: `frequency_dictionary_en_82_765.txt`.
+* Ensure that the embedding model (for example, `paraphrase-multilingual-MiniLM-L12-v2`) and the cross-encoder model (for example, `ms-marco-MiniLM-L6-v2`) are available locally.
+* Confirm that Ollama is running on the default endpoint (`http://localhost:11434`) and that the required models are installed, such as `llama3.2` and `llava` for multimodal support.
+
+After completing the setup, start the Agentic RAG application with:
+
+```bash
+uv run python src/agentic_rag/run_agentic_rag.py
+```
+
+> Query: `What are the nutritional values of the mixed salad with fish?`
+Expected output:
+
+```bash
+==================================================
+Query: What are the nutritional values of the mixed salad with fish?
+Answer: Based on the provided context, here is the information about the nutritional values of a mixed salad with fish:
+
+* Energy: 110 kcal/100g
+* Water content: 76.7g/100g
+* Protein content: 8.06g/100g
+* Fat content: 5.3g/100g
+* Saturated fat content: 0.3g/100g
+* Cholesterol content: 15.2mg/100g
+* Sodium content: 381mg/100g
+* Calcium content: 22mg/100g
+* Potassium content: 220mg/100g
+
+Additionally, the mixed salad with fish is a good source of:
+
+* Vitamin A activity (retinol equivalent): 75.6µg/100g
+* Beta-carotene: 781µg/100g
+* Vitamin D3 (cholecalciferol): 0.44µg/100g
+* Alpha-tocopherol (vitamine E): 2.04mg/100g
+
+Please note that the nutritional values provided are for a serving size of 100g, and may vary depending on the specific ingredients and portion sizes used.
+Total sources: 1
+Follow-up questions: ['Is the fish used in the mixed salad wild-caught or farmed?', 'What are the typical cooking methods for the fish served with the mixed salad?', 'Are there any specific nutritional benefits associated with the type of fish commonly paired with mixed salads?']
+
+Refined query:
+  Original: What are the nutritional values of the mixed salad with fish?
+  Corrected: what are the nutritional values of the mixed salad with fish
+  Rewritten: "What is the nutritional content of a mixed green salad with grilled or baked fish?"
+  Variations: "What is the nutritional content of a mixed green salad with grilled or baked fish?", "What nutrients are found in a typical serving size of mixed greens, along with grilled or baked salmon?", "How does the nutritional profile of a mixed green salad change when paired with baked cod versus grilled tilapia?"
+==================================================
+
+Source 1: alim_grp_code: 1
+alim_ssgrp_code: 101
+alim_ssssgrp_code: 0
+alim_grp_nom_eng: starters and dishes
+alim_ssgrp_nom_eng: mixed salads
+alim_ssssgrp_nom_eng: -
+alim_code: 25602
+alim_nom_eng: Mixed salad, wi... (score: -5.117337226867676)
+```
 
 ---
 

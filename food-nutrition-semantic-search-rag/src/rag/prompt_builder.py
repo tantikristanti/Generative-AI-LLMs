@@ -4,8 +4,10 @@
 import logging
 from typing import List, Dict, Any, Optional, Union
 from PIL import Image
-from rag import BasePromptBuilder, RetrievedDocument
 import re
+
+# Sibling module imports
+from .rag_base import BasePromptBuilder, RetrievedDocument
 
 logger = logging.getLogger(__name__)
 

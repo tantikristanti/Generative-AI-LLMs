@@ -2,11 +2,14 @@
 """Main RAG system orchestrator."""
 
 import logging
-from typing import List, Dict, Any, Optional, Union
+from typing import List, Optional
 from PIL import Image
-from rag import BaseRetriever, BasePromptBuilder, BaseLLMClient, \
-    RetrievedDocument, RAGResponse, ImageAwareFoodRetriever, \
-    FoodPromptBuilder, OllamaClient
+
+# Sibling module imports
+from .rag_base import BaseRetriever, BasePromptBuilder, BaseLLMClient, RAGResponse
+from .food_image_retriever import ImageAwareFoodRetriever
+from .prompt_builder import FoodPromptBuilder
+from .ollama_client import OllamaClient
 
 logger = logging.getLogger(__name__)
 

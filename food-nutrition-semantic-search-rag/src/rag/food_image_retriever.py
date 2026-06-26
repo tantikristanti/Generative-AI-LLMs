@@ -2,11 +2,17 @@
 """Retriever implementation using existing FoodRetriever from ciqual_etl."""
 
 import logging
-from typing import List, Dict, Any, Optional
+from typing import List, Optional
 from PIL import Image
 
-from ciqual_etl import FoodRetriever as BaseFoodRetriever
-from rag import BaseRetriever, RetrievedDocument
+# Cross‑package imports
+from ciqual_etl.food_search_engine import FoodRetriever as BaseFoodRetriever
+
+# Sibling module imports
+from .rag_base import BaseRetriever, RetrievedDocument
+from .config import RAGConfig
+
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -17,6 +23,7 @@ class ImageAwareFoodRetriever(BaseRetriever):
     """
 
     def __init__(self, 
+                 config: Optional[RAGConfig] = None,
                  model_name: str = "paraphrase-multilingual-MiniLM-L12-v2",
                  table_name: str = "food_composition_embeddings",
                  image_handler: Optional['ImageHandler'] = None):
@@ -28,7 +35,9 @@ class ImageAwareFoodRetriever(BaseRetriever):
             table_name: PostgreSQL table name for embeddings.
             image_handler: Optional handler for fetching food images.
         """
-        self._retriever = BaseFoodRetriever(model_name=model_name) # FoodRetriever from etl_ciqual package
+        # Use config if provided, else fallback to default_config
+        self.config = config or RAGConfig()
+        self._retriever = BaseFoodRetriever(config=self.config) # FoodRetriever from etl_ciqual package with default configuration (from config/rag_config.yaml)
         self.table_name = table_name
         self.image_handler = image_handler
         self.model_name = model_name

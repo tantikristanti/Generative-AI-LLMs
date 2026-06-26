@@ -12,7 +12,8 @@ import logging
 import tempfile
 import os
 
-from rag import RAGSystem
+# Sibling module imports
+from .rag_system import RAGSystem
 
 logger = logging.getLogger(__name__)
 
